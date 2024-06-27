@@ -36,6 +36,42 @@
  %   cited in the text, or that in the database.
  %---------------------------------------------------------------------
 
+%% V3.1 (2024.06.27)
+%% 1. fix thesis [D]
+%%
+
+%% V3.0 Revision:
+%% 1. Add a new citation format @website and a new function add.EBOL, which corresponds to [EB/OL] -- ArXiv, Web, etc.
+%% Usage:
+%% @website{clevert2015ELU,
+%%   title={Fast and accurate deep network learning by exponential linear units (elus)},
+%%   author={Clevert, Djork-Arn{\'e} and Unterthiner, Thomas and Hochreiter, Sepp},
+%%   year={2015},
+%%   howpublished={https://arxiv.org/abs/1511.07289}
+%% }
+%%
+%% 2. Add a new citation format @freecite and a new function add.GBTSYMBOL, which corresponds to any GB/T citation format. Use author + title + symbol + freeinfo to generate the citation with a custom GB/T symbol and information.
+%% Usage:
+%% @freecite{scarselli2008GNN,
+%%   title={The graph neural network model},
+%%   author={Scarselli, Franco and Gori, Marco and Tsoi, Ah Chung and Hagenbuchner, Markus and Monfardini, Gabriele},
+%%   symbol={J},
+%%   freeinfo={IEEE transactions on neural networks, 2008, 20(1): 61-80}
+%% }
+%%
+%% 3. Introduce an optional page output function freeoutput.pages, which can change the citation format with or without pages automatically. Now it is available at @inproceedings and @book.
+%% Usage:
+%% FUNCTION {freeoutput.pages}
+%% { format.pages missing$
+%%   {}
+%%   { add.colon
+%%     format.pages "pages" output.check
+%%   }
+%%   if$
+%% }
+%%
+%% 4. Bug fixed, such as function add.D, and change the position of function add.colon
+
 ENTRY
   { address
     author
@@ -44,10 +80,12 @@ ENTRY
     edition
     editor
     eid
+    freeinfo % V3.0 new, belong to @freecite
     howpublished
     institution
     journal
     key
+    language
     month
     note
     number
@@ -56,6 +94,7 @@ ENTRY
     publisher
     school
     series
+    symbol % V3.0 new, belong to @freecite
     title
     type
     volume
@@ -225,8 +264,19 @@ FUNCTION {space.word}
 FUNCTION {bbl.and}
 { "\protect\BIBand{}"}
 
+% default for English
 FUNCTION {bbl.etal}
-{ "et~al." }
+{
+  language empty$
+  {"et~al."}
+  {
+    language "zh" =
+    {"ç­‰"}
+    {}
+    if$
+  }
+  if$
+}
 
 FUNCTION {bbl.editors}
 { "eds." }
@@ -426,6 +476,7 @@ INTEGERS { nameptr namesleft numnames }
 
 STRINGS  { bibinfo}
 
+% Support for adding "et al." automatically in V3.0
 FUNCTION {format.names}
 { 'bibinfo :=
   duplicate$ empty$ 'skip$ {
@@ -433,7 +484,11 @@ FUNCTION {format.names}
   "" 't :=
   #1 'nameptr :=
   s num.names$ 'numnames :=
-  numnames 'namesleft :=
+  numnames #3 >
+  { #4 }
+  { numnames }
+  if$
+  'namesleft :=
     { namesleft #0 > }
     { s nameptr
       "{vv~}{ll}{ f{~}}{ jj}"
@@ -444,18 +499,13 @@ FUNCTION {format.names}
       nameptr #1 >
         {
           namesleft #1 >
-            { ", " * t * }
             {
-              s nameptr "{ll}" format.name$ duplicate$ "others" =
-                { 't := }
-                { pop$ }
-              if$
-              "," *
-              t "others" =
-                {
-                  " " * bbl.etal *
-                }
-                { " " * t * }
+              ", " * t * 
+            }
+            {
+              numnames #3 >
+              { ", " * bbl.etal * }
+              { ", " * t * }
               if$
             }
           if$
@@ -553,6 +603,14 @@ FUNCTION {n.dashify}
 
 FUNCTION {word.in}
 { "" }
+
+%V3.0 new, for url in "howpublished"
+FUNCTION {format.howpublished}
+{ howpublished empty$
+    { "" }
+    { "\url{" howpublished * "}" * }
+  if$
+}
 
 FUNCTION {format.date}
 {
@@ -976,10 +1034,49 @@ FUNCTION {add.M} %%%alanxu-5-21
   if$
 }
 
+% V3.0 new
+FUNCTION {add.EBOL}
+{ duplicate$ empty$
+   'skip$
+   { " [EB/OL]" * }
+ if$
+}
+
+% Fixed in V3.0
 FUNCTION {add.D} %%%alanxu-5-21
 { duplicate$ empty$
     'skip$
-    { " [²©Ê¿Ñ§Î»ÂÛÎÄ]" * }
+    { " [D]" * }
+  if$
+}
+
+% V3.0 new, support any custom GB/T symbol by "symbol"
+FUNCTION {add.GBTSYMBOL}
+{ symbol empty$
+  {"the symbol of GB/T 7714-2005 is empty" cite$ * warning$}
+  { duplicate$ empty$
+    'skip$
+    {" [" * symbol * "]" * }
+    if$
+  }
+  if$
+}
+
+% Function position changed in V3.0
+FUNCTION {add.colon} %%%alanxu-5-21
+{ duplicate$ empty$
+    'skip$
+    { ":" * add.blank }
+  if$
+}
+
+% V3.0 new, support optional pages output
+FUNCTION {freeoutput.pages}
+{ format.pages missing$
+  {}
+  { add.colon
+    format.pages "pages" output.check
+  }
   if$
 }
 
@@ -1011,6 +1108,7 @@ FUNCTION {article}
   format.note output
   fin.entry
 }
+% Changed in V3.0, an optional choice for format.pages
 FUNCTION {book}
 { output.bibitem
   author empty$
@@ -1038,6 +1136,7 @@ FUNCTION {book}
   if$
   format.edition output
   format.date "year" output.check
+  freeoutput.pages
   format.note output
   fin.entry
 }
@@ -1087,15 +1186,6 @@ FUNCTION {inbook}
   fin.entry
 }
 
-FUNCTION {add.colon} %%%alanxu-5-21
-{ duplicate$ empty$
-    'skip$
-    { ":" * add.blank }
-  if$
-}
-
-
-
 FUNCTION {incollection}
 { output.bibitem
   format.authors "author" output.check
@@ -1123,7 +1213,7 @@ FUNCTION {incollection}
 }
 
 
-
+% Changed in V3.0, an optional choice for format.pages, now support @inproceedings without pages (e.g., NeurIPS)
 FUNCTION {inproceedings}
 { output.bibitem
   format.authors "author" output.check
@@ -1146,8 +1236,7 @@ FUNCTION {inproceedings}
     }
   if$
   format.date "year" output.check
-      add.colon
-  format.pages "pages" output.check
+  freeoutput.pages
   format.note output
   fin.entry
 }
@@ -1188,19 +1277,32 @@ FUNCTION {manual}
   fin.entry
 }
 
-FUNCTION {mastersthesis}
+% V3.0 new, a new citation format for custom GB/T citation format
+% author + title + GB/T symbol + extra information
+FUNCTION {freecite}
 { output.bibitem
-  format.authors "author" output.check
+  format.authors output
   new.sentence
-  format.title
-  "title" output.check
+  format.title "title" output.check
+  add.GBTSYMBOL
   new.sentence
-  bbl.mthesis format.thesis.type output.nonnull
-  school "school" bibinfo.warn output
-  address "address" bibinfo.check output
-  format.date "year" output.check
-  format.note output
+  freeinfo "freeinfo" bibinfo.check output
   fin.entry
+}
+
+% V3.0 new, a new citation format from @misc, support [EB/OL] like ArXiv and Web
+FUNCTION {website}
+{ output.bibitem
+ format.authors output
+ new.sentence
+ format.title "title" output.check
+ add.EBOL
+ new.sentence
+ format.howpublished output
+ format.date output
+ format.note output
+ fin.entry
+ empty.misc.check
 }
 
 FUNCTION {misc}
@@ -1215,6 +1317,21 @@ FUNCTION {misc}
   fin.entry
   empty.misc.check
 }
+FUNCTION {thesis}
+{ output.bibitem
+  format.authors "author" output.check
+  new.sentence
+  format.title
+  "title" output.check
+  add.D
+  new.sentence
+  address "address" bibinfo.check output
+  add.colon
+  school "school" bibinfo.warn output
+  format.date "year" output.check
+  format.note output
+  fin.entry
+}
 FUNCTION {phdthesis}
 { output.bibitem
   format.authors "author" output.check
@@ -1223,13 +1340,13 @@ FUNCTION {phdthesis}
   "title" output.check
   add.D
   new.sentence
-  school "school" bibinfo.warn output
   address "address" bibinfo.check output
+  add.colon
+  school "school" bibinfo.warn output
   format.date "year" output.check
   format.note output
   fin.entry
 }
-
 FUNCTION {proceedings}
 { output.bibitem
   editor empty$
@@ -1327,4 +1444,4 @@ EXECUTE {end.bib}
 %% End of customized bst file
 %%
 
-%% End of file `swjtuJiXu.bst'.
+%% End of file `swjtuBST.bst'.
